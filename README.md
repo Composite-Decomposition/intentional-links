@@ -13,7 +13,9 @@ Standard hyperlinks bind a human-readable anchor to a network location (`href`),
 
 Existing archival specifications such as Robust Links solve *link rot* (`404 Not Found`) by decorating anchor elements with snapshot metadata (`data-versionurl`, `data-versiondate`, `data-originalurl`). However, Robust Links do not express *what* the target resource is expected to convey, nor can they detect when a live `200 OK` target has semantically betrayed the linking document.
 
-**Intentional Links** extend Robust Links with two declarative HTML attributes—`data-intention` and `data-action`—enabling asynchronous, build-time semantic validators to verify whether a target resource still fulfills the author's intent and deterministically heal the DOM when drift occurs.
+**Intentional Links** extend Robust Links with two declarative HTML attributes—`data-intention` and `data-action`—enabling build-time semantic evaluators (validators) to verify whether a target resource still fulfills the author's intent and repairs the anchor when drift is detected. Detection itself is implementation-defined: embeddings, LLM adjudication, structural checks, or heuristics. The specification standardizes the contract and the remediation protocol, not the oracle.
+
+The repository is deliberately not a single executable tool. It is the canonical hub for the standard: RFCs, architectural edge cases, and a registry of community-built evaluators across ecosystems (CLI tools, GitHub Actions, static site generator plugins).
 
 ---
 
@@ -22,7 +24,7 @@ Existing archival specifications such as Robust Links solve *link rot* (`404 Not
 The key words **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**, **SHOULD**, **SHOULD NOT**, **RECOMMENDED**, **MAY**, and **OPTIONAL** in this document are to be interpreted as described in [RFC 2119](https://www.ietf.org/rfc/rfc2119.txt).
 
 * **Intentional Link:** An HTML `<a>` element containing a non-empty `href` attribute and a non-empty `data-intention` attribute.
-* **Target Resource:** The final representation retrieved after following HTTP redirects (`301`, `302`, `307`, `308`) from the URI specified in `href`.
+* **Target Resource:** The final representation retrieved after following HTTP redirects (`301`, `302`, `307`, `308`) from the URL specified in `href`.
 * **Semantic Intent:** The concise, natural-language condition declared in `data-intention` that the Target Resource must satisfy to remain valid within the context of the linking document.
 * **Content Drift:** A state in which the Target Resource resolves over HTTP (`2xx`) yet fails to satisfy the declared Semantic Intent.
 * **Evaluator:** Any compliant build-time CLI, CI/CD step, static site generator plugin, or automated AI agent that validates Intentional Links and applies DOM transformations.
@@ -31,11 +33,11 @@ The key words **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**, **
 
 ## 3. Relationship to Robust Links (Backward Compatibility)
 
-Intentional Links are designed as a **strictly backward-compatible superset** of the Robust Links specification:
+Intentional Links are designed as a **backward-compatible superset** of the Robust Links specification (no existing markup is invalidated):
 
 1. **Valid HTML5 & Robust Links:** Every Intentional Link is a valid HTML5 `<a>` element. Authors **SHOULD** pair `data-intention` with standard Robust Links attributes (`data-versionurl`, `data-versiondate`, and/or `data-originalurl`) whenever archival fallback is desired.
 2. **Lifecycle Separation:** Robust Links define *runtime and archival decoration* for browsers, crawlers, and client-side scripts (`robustlinks.js`). Intentional Links define *authoring-time and build-time semantic validation*.
-3. **Zero Runtime Overhead:** Evaluators **SHOULD** execute asynchronously during build or CI/CD pipelines rather than intercepting user clicks at runtime.
+3. **Zero Runtime Overhead:** Evaluators **SHOULD** execute during build or CI/CD pipelines rather than intercepting user clicks at runtime.
 4. **Drop-In Output Compatibility:** Once an Evaluator applies a healing action (`switch-to-snapshot`, `switch-to-robust`, `unlink`, or `keep-live`), the resulting HTML conforms directly to standard Robust Links or plain HTML and works without modification alongside existing Robust Links client-side libraries.
 
 ---
@@ -59,7 +61,7 @@ The `data-intention` attribute **MUST** contain a self-contained statement descr
 
 ### 4.2 `data-action`
 
-The `data-action` attribute declares the deterministic DOM mutation an Evaluator **MUST** execute when semantic validation evaluates to `FAIL`.
+The `data-action` attribute declares the deterministic anchor mutation an Evaluator **MUST** execute when semantic validation evaluates to `FAIL`.
 
 * Valid values are `keep-live`, `unlink`, `switch-to-snapshot`, and `switch-to-robust`.
 * Values **MUST** be matched case-insensitively after trimming leading and trailing whitespace.
@@ -90,6 +92,7 @@ When an Intentional Link fails validation (`FAIL`), the Evaluator **MUST** trans
 
 ### 6.2 `unlink`
 * **Behavior:** Remove the `href` attribute from the `<a>` element, preserving its inner text and surrounding markup so readers are not routed to a misleading destination.
+* **Signaling:** The Evaluator **SHOULD** emit a non-blocking warning in build logs for human review.
 
 ### 6.3 `switch-to-snapshot`
 * **Precondition:** Requires a non-empty `data-versionurl` attribute. If `data-versionurl` is missing, the Evaluator **MUST NOT** modify `href` and **SHOULD** emit a warning.
@@ -119,6 +122,7 @@ An author cites a historic CloudBees engineering guide and binds both a Web Arch
    CloudBees Docker Jenkins Guide
 </a>
 ```
+When the live resource is missing (404 or FAIL), the evaluator rewrites href to the Web Archive URL and strips the Robust Links metadata—routing readers directly to the preserved guide.
 
 ### 7.2 Drift Event with Redirection
 IEEE Computer Society restructures its site and redirects `www.computer.org/education/registered-education-providers` (`301` → `200 OK`) to a generic education related homepage. A traditional link checker passes; an Intentional Links Evaluator detects that the extracted homepage text does not list registered education providers (`FAIL`).
@@ -133,8 +137,10 @@ IEEE Computer Society restructures its site and redirects `www.computer.org/educ
    IEEE CS registered education providers
 </a>
 ```
+Because `data-originalurl`, `data-versiondate` and `data-versionurl` are present, `switch-to-robust` leaves the anchor untouched so Robust Links client-side scripts can surface the archival version alongside the live page.
+
 ### 7.3 Drift Event without Redirection
-Over time, ACME Corporation modified its tutorial to the point that non-experts could no longer understand it.
+Over time, ACME Corporation modified its fictitious tutorial to the point that non-experts could no longer understand it.
 
 ```html
 <a href="https://example.com/tutorial"
@@ -145,6 +151,8 @@ Over time, ACME Corporation modified its tutorial to the point that non-experts 
    ACME tutorial
 </a>
 ```
+Because `data-originalurl`, `data-versiondate` are present, `switch-to-robust` leaves the anchor untouched so Robust Links client-side scripts can surface the archival version alongside the live page.
+
 ---
 
 ## 8. Related Work
@@ -174,7 +182,7 @@ content no longer matches the context in which it was cited — is a recognized 
 problem. Recent academic work such as **SemLink** [2] proposes an automated test oracle
 for semantic hyperlink verification, using sentence-embedding models to detect when a
 target's content diverges from its anchor text or surrounding context. That line of work
-validates the importance of the problem and offers ML-based *detection*. Intentional
+validates the importance of the problem and offers fast ML-based *detection*. Intentional
 Links is complementary rather than competing: it does not specify how the Evaluator must
 detect drift, but it standardizes **how the author declares the intent to be
 checked** and **what deterministic action follows a failed check**. In other words,
@@ -224,7 +232,7 @@ This repository serves as the canonical specification hub for **Intentional Link
 You can participate in the following ways:
 * **Propose a Specification Refinement (RFC):** Open a specification proposal to discuss new `data-action` strategies, Markdown syntax conventions, or caching metadata.
 * **Report an Edge Case:** Found an ambiguous redirect, SPA hydration issue, or Robust Links interaction? File an edge case.
-* **Build & Register an Evaluator:** Implement the spec in your preferred language or SSG and submit an issue to list it in the table above.
+* **Build & Register an Evaluator:** Implement the spec in your preferred language and submit an issue to list it in the table of reference implementations.
 
 ---
 
