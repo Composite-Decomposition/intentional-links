@@ -2,7 +2,7 @@
 
 * **Version:** `0.1-draft`
 * **Status:** Community Draft (Open for RFCs and Implementations)
-* **Compatibility:** Backward-compatible extension of the [Robust Links Specification](https://robustlinks.org/spec/)
+* **Compatibility:** Backward-compatible extension of the Robust Links specification [1]
 * **Maintainers:** [Composite Decomposition](https://github.com/Composite-Decomposition)
 
 ---
@@ -11,7 +11,7 @@
 
 Standard hyperlinks bind a human-readable anchor to a network location (`href`), while severing the author's semantic reason for creating the reference. Automated link checkers validate transport mechanics (`HTTP 200 OK`), not meaning. When an external resource is replaced by a generic landing page, moved behind an unrelated redirect, or repurposed over time, transport checks continue to pass while the reader loses the intended context—a silent failure mode termed **content drift**.
 
-Existing archival specifications such as [Robust Links](https://robustlinks.org/spec/) solve *link rot* (`404 Not Found`) by decorating anchor elements with snapshot metadata (`data-versionurl`, `data-versiondate`, `data-originalurl`). However, Robust Links do not express *what* the target resource is expected to convey, nor can they detect when a live `200 OK` target has semantically betrayed the linking document.
+Existing archival specifications such as Robust Links solve *link rot* (`404 Not Found`) by decorating anchor elements with snapshot metadata (`data-versionurl`, `data-versiondate`, `data-originalurl`). However, Robust Links do not express *what* the target resource is expected to convey, nor can they detect when a live `200 OK` target has semantically betrayed the linking document.
 
 **Intentional Links** extend Robust Links with two declarative HTML attributes—`data-intention` and `data-action`—enabling asynchronous, build-time semantic validators to verify whether a target resource still fulfills the author's intent and deterministically heal the DOM when drift occurs.
 
@@ -31,7 +31,7 @@ The key words **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**, **
 
 ## 3. Relationship to Robust Links (Backward Compatibility)
 
-Intentional Links are designed as a **strictly backward-compatible superset** of the [Robust Links Specification](https://robustlinks.org/spec/):
+Intentional Links are designed as a **strictly backward-compatible superset** of the Robust Links specification:
 
 1. **Valid HTML5 & Robust Links:** Every Intentional Link is a valid HTML5 `<a>` element. Authors **SHOULD** pair `data-intention` with standard Robust Links attributes (`data-versionurl`, `data-versiondate`, and/or `data-originalurl`) whenever archival fallback is desired.
 2. **Lifecycle Separation:** Robust Links define *runtime and archival decoration* for browsers, crawlers, and client-side scripts (`robustlinks.js`). Intentional Links define *authoring-time and build-time semantic validation*.
@@ -42,7 +42,7 @@ Intentional Links are designed as a **strictly backward-compatible superset** of
 
 ## 4. Attribute Specification
 
-An Intentional Link is expressed on an HTML `<a>` element using the following attributes besides those inherited from [Robust Links](https://robustlinks.org/spec/):
+An Intentional Link is expressed on an HTML `<a>` element using the following attributes besides those inherited from Robust Links:
 
 | Attribute | Requirement | Specification | Value Format |
 | :--- | :--- | :--- | :--- |
@@ -147,7 +147,77 @@ Over time, ACME Corporation modified its tutorial to the point that non-experts 
 ```
 ---
 
-## 8. Community Implementations & Collaboration
+## 8. Related Work
+
+The problem of link integrity has been addressed from several angles, but no existing
+specification combines **author-declared, natural-language intent** with **build-time,
+deterministic remediation**. This section positions Intentional Links relative to the
+most relevant prior art and clarifies the gap this specification fills.
+
+### Link Rot and Robust Links
+
+The most common response to link degradation is **link rot** (HTTP 404 or 410), and the
+**Robust Links** specification [1] is the closest existing standard. Robust Links
+addresses rot by decorating `<a>` elements with snapshot metadata (`data-versionurl`,
+`data-versiondate`), enabling a client or archive to redirect to a preserved copy when
+the live target disappears. Intentional Links is designed as a **backward-compatible
+superset** of Robust Links: an element may carry both the Robust Links attributes and
+the `data-intention`/`data-action` attributes defined here. The critical distinction is
+that Robust Links responds to a target that is *gone*, whereas Intentional Links
+responds to a target that is *still reachable but no longer says what the author
+claimed it would say* — the content-drift problem.
+
+### Semantic Drift and Automated Verification
+
+**Content drift** (sometimes called *semantic drift*) — a live, HTTP 200 target whose
+content no longer matches the context in which it was cited — is a recognized research
+problem. Recent academic work such as **SemLink** [2] proposes an automated test oracle
+for semantic hyperlink verification, using sentence-embedding models to detect when a
+target's content diverges from its anchor text or surrounding context. That line of work
+validates the importance of the problem and offers ML-based *detection*. Intentional
+Links is complementary rather than competing: it does not specify how the Evaluator must
+detect drift, but it standardizes **how the author declares the intent to be
+checked** and **what deterministic action follows a failed check**. In other words,
+SemLink and similar systems provide the *oracle*; Intentional Links provides the
+*declarative contract and remediation protocol* around that oracle.
+
+### Historical Precedent: Web Intents and `rel="intent"`
+
+The idea of attaching intent semantics to a hyperlink is not without precedent. The W3C
+**Web Intents** effort explored adding `rel="intent"` to links so that a
+link could declare the *service action* it intended to invoke (e.g. share, edit, view)
+rather than merely its destination [3]. Web Intents was oriented toward **service
+discovery and interoperability** — routing a URL to a handler — and did not attempt to
+validate the *content* of the target or define fallback behavior on failure. Intentional
+Links differs in purpose (content-contract validation), syntax (`data-intention` holding
+a falsifiable natural-language assertion), and lifecycle (build-time evaluation by an
+Evaluator, not runtime routing by a user agent).
+
+### Existing Link Semantics: `rel` and Typed Links
+
+HTML's `rel` attribute and the IETF **Web Linking** framework (RFC 5988 and its
+successor RFC 8288) [4] already allow an author to declare the *relationship type*
+between the current document and the target — values such as `author`, `license`,
+`alternate`, or `nofollow`. The Semantic Web community describes these as **typed
+links**, where the edge itself carries meaning. Intentional Links operates at a
+different level of granularity: `rel` categorizes the *kind* of relationship, while
+`data-intention` states a *falsifiable proposition about the target's content*. The two
+are orthogonal and may be combined on the same element. Nothing in this specification
+depends on, or conflicts with, the `rel` registry.
+
+### Interaction Intent: Open UI `interesttarget`
+
+The Open UI community group has discussed an `interesttarget` attribute (and related
+"interest" events) for buttons and links, which signals a user's intent to trigger a
+particular interaction — typically revealing a popover or preview [5]. This is a
+**runtime, user-facing interaction hint**; it is not a content assertion and is not
+evaluated against the target's substance. It is mentioned here only to distinguish
+*interaction intent* (what the user wants to do) from *content intention* (what the
+author asserts the target will say), which is the concern of this specification.
+
+---
+
+## 9. Community Implementations & Collaboration
 
 This repository serves as the canonical specification hub for **Intentional Links**. Rather than locking the standard to a single programming language or LLM vendor, we encourage community-maintained evaluators, CI actions, and static site generator plugins across ecosystems.
 
@@ -155,3 +225,19 @@ You can participate in the following ways:
 * **Propose a Specification Refinement (RFC):** Open a specification proposal to discuss new `data-action` strategies, Markdown syntax conventions, or caching metadata.
 * **Report an Edge Case:** Found an ambiguous redirect, SPA hydration issue, or Robust Links interaction? File an edge case.
 * **Build & Register an Evaluator:** Implement the spec in your preferred language or SSG and submit an issue to list it in the table above.
+
+---
+
+## 10. References
+
+[1]: Robust Links specification. https://robustlinks.org/spec/
+
+[2]: SemLink: A Semantic-Aware Automated Test Oracle for Hyperlink Verification using Siamese Sentence-BERT. https://arxiv.org/abs/2604.05711
+
+[3]: W3C Web Intents. https://www.w3.org/TR/web-intents/
+
+[4]: M. Nottingham, "Web Linking," IETF RFC 8288 (successor to RFC 5988).
+    https://www.rfc-editor.org/rfc/rfc8288
+
+[5]: Open UI Community Group, `interesttarget` attribute / interest invokers proposal.
+    https://open-ui.org/
