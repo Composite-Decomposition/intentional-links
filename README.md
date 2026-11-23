@@ -3,7 +3,7 @@
 * **Version:** `0.1-draft`
 * **Status:** Community Draft (Open for RFCs and Implementations)
 * **Compatibility:** Backward-compatible extension of the [Robust Links Specification](https://robustlinks.org/spec/)
-* **Maintainers:** [Composite Decomposition](https://github.com/CompositeDecomposition)
+* **Maintainers:** [Composite Decomposition](https://github.com/Composite-Decomposition)
 
 ---
 
